@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, Heart, TrendingUp, AlertCircle, CheckCircle, Moon, Sun, Droplets, Activity } from 'lucide-react';
+import { ArrowLeft, Calendar, Heart, TrendingUp, AlertCircle, CheckCircle, Moon, Sun, Droplets, Activity, Sparkles, Flower } from 'lucide-react';
 
 interface SakhiModuleProps {
   onBack: () => void;
@@ -22,6 +22,8 @@ interface CyclePredictions {
   hormoneLevel: string;
   fertilityScore: number;
   cycleDay: number;
+  emotionalSupport: string;
+  wellnessTip: string;
 }
 
 interface SymptomEntry {
@@ -30,668 +32,332 @@ interface SymptomEntry {
   mood: string;
   flow: string;
   notes: string;
+  energyLevel: number;
+  selfCareActivities: string[];
 }
 
-function SakhiModule({ onBack }: SakhiModuleProps) {
+const SakhiModule: React.FC<SakhiModuleProps> = ({ onBack }) => {
+  const [activeTab, setActiveTab] = useState<'tracker' | 'insights' | 'symptoms' | 'wellness'>('tracker');
   const [cycleData, setCycleData] = useState<CycleData>({
     lastPeriodDate: '',
     cycleLength: 28,
     periodLength: 5,
     flowIntensity: 'medium'
   });
-  
+  const [symptoms, setSymptoms] = useState<SymptomEntry[]>([]);
   const [predictions, setPredictions] = useState<CyclePredictions | null>(null);
-  const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [currentMood, setCurrentMood] = useState('');
-  const [flowLevel, setFlowLevel] = useState('');
-  const [notes, setNotes] = useState('');
-  const [symptomHistory, setSymptomHistory] = useState<SymptomEntry[]>([]);
-  const [isSetup, setIsSetup] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'track' | 'insights' | 'calendar'>('overview');
 
-  const calculateAdvancedPredictions = (data: CycleData): CyclePredictions => {
+  const calculatePredictions = (data: CycleData): CyclePredictions => {
+    if (!data.lastPeriodDate) {
+      const today = new Date();
+      return {
+        nextPeriod: new Date(today.getTime() + 28 * 24 * 60 * 60 * 1000),
+        ovulation: new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000),
+        fertileWindow: {
+          start: new Date(today.getTime() + 12 * 24 * 60 * 60 * 1000),
+          end: new Date(today.getTime() + 16 * 24 * 60 * 60 * 1000)
+        },
+        daysUntilNextPeriod: 28,
+        currentPhase: 'Follicular',
+        phaseDescription: 'Your body is preparing for ovulation',
+        hormoneLevel: 'Rising estrogen',
+        fertilityScore: 3,
+        cycleDay: 1,
+        emotionalSupport: 'Take time for self-care and gentle movement',
+        wellnessTip: 'Stay hydrated and eat iron-rich foods'
+      };
+    }
+
     const lastPeriod = new Date(data.lastPeriodDate);
     const today = new Date();
+    const daysSinceLastPeriod = Math.floor((today.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
+    const cycleDay = (daysSinceLastPeriod % data.cycleLength) + 1;
     
-    // Calculate cycle day
-    const cycleDay = Math.floor((today.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const adjustedCycleDay = cycleDay > data.cycleLength ? cycleDay % data.cycleLength : cycleDay;
+    const nextPeriod = new Date(lastPeriod.getTime() + data.cycleLength * 24 * 60 * 60 * 1000);
+    const ovulation = new Date(lastPeriod.getTime() + (data.cycleLength - 14) * 24 * 60 * 60 * 1000);
+    const fertileStart = new Date(ovulation.getTime() - 5 * 24 * 60 * 60 * 1000);
+    const fertileEnd = new Date(ovulation.getTime() + 1 * 24 * 60 * 60 * 1000);
     
-    // Next period calculation
-    const nextPeriod = new Date(lastPeriod);
-    nextPeriod.setDate(lastPeriod.getDate() + data.cycleLength);
+    const daysUntilNextPeriod = Math.max(0, Math.floor((nextPeriod.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
     
-    // Ovulation calculation (typically 14 days before next period)
-    const ovulation = new Date(nextPeriod);
-    ovulation.setDate(nextPeriod.getDate() - 14);
-    
-    // Fertile window (5 days before ovulation + ovulation day + 1 day after)
-    const fertileStart = new Date(ovulation);
-    fertileStart.setDate(ovulation.getDate() - 5);
-    const fertileEnd = new Date(ovulation);
-    fertileEnd.setDate(ovulation.getDate() + 1);
-    
-    // Days until next period
-    const daysUntilNext = Math.ceil((nextPeriod.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    // Determine current phase and hormone levels
-    let currentPhase = '';
-    let phaseDescription = '';
-    let hormoneLevel = '';
-    let fertilityScore = 0;
-    
-    if (adjustedCycleDay <= data.periodLength) {
-      currentPhase = 'Menstrual Phase';
-      phaseDescription = 'Your body is shedding the uterine lining. Rest and self-care are important.';
+    let currentPhase = 'Follicular';
+    let phaseDescription = 'Your body is preparing for ovulation';
+    let hormoneLevel = 'Rising estrogen';
+    let fertilityScore = 2;
+    let emotionalSupport = 'Focus on energizing activities';
+    let wellnessTip = 'Great time for cardio and strength training';
+
+    if (cycleDay >= 1 && cycleDay <= data.periodLength) {
+      currentPhase = 'Menstrual';
+      phaseDescription = 'Your period is here - time for rest and renewal';
       hormoneLevel = 'Low estrogen and progesterone';
-      fertilityScore = 10;
-    } else if (adjustedCycleDay <= 13) {
-      currentPhase = 'Follicular Phase';
-      phaseDescription = 'Your body is preparing for ovulation. Energy levels may be increasing.';
+      fertilityScore = 1;
+      emotionalSupport = 'Be gentle with yourself and prioritize comfort';
+      wellnessTip = 'Light yoga and warm baths can help with cramps';
+    } else if (cycleDay > data.periodLength && cycleDay < data.cycleLength - 14) {
+      currentPhase = 'Follicular';
+      phaseDescription = 'Energy is building as your body prepares for ovulation';
       hormoneLevel = 'Rising estrogen';
-      fertilityScore = 30;
-    } else if (adjustedCycleDay >= 12 && adjustedCycleDay <= 16) {
-      currentPhase = 'Ovulation Phase';
-      phaseDescription = 'Peak fertility window. Your body is releasing an egg.';
+      fertilityScore = 3;
+      emotionalSupport = 'Great time to start new projects and socialize';
+      wellnessTip = 'Perfect for trying new workouts and activities';
+    } else if (cycleDay >= data.cycleLength - 16 && cycleDay <= data.cycleLength - 12) {
+      currentPhase = 'Ovulation';
+      phaseDescription = 'Peak fertility window - your body is ready';
       hormoneLevel = 'Peak estrogen, LH surge';
-      fertilityScore = 95;
+      fertilityScore = 5;
+      emotionalSupport = 'You may feel confident and social';
+      wellnessTip = 'Stay hydrated and listen to your body';
     } else {
-      currentPhase = 'Luteal Phase';
-      phaseDescription = 'Post-ovulation phase. You might experience PMS symptoms.';
-      hormoneLevel = 'High progesterone, declining estrogen';
-      fertilityScore = 20;
+      currentPhase = 'Luteal';
+      phaseDescription = 'Your body is either preparing for pregnancy or your next cycle';
+      hormoneLevel = 'Rising progesterone';
+      fertilityScore = 2;
+      emotionalSupport = 'Focus on self-care and stress management';
+      wellnessTip = 'Gentle exercise and nutritious meals support your body';
     }
-    
+
     return {
       nextPeriod,
       ovulation,
       fertileWindow: { start: fertileStart, end: fertileEnd },
-      daysUntilNextPeriod: daysUntilNext > 0 ? daysUntilNext : 0,
+      daysUntilNextPeriod,
       currentPhase,
       phaseDescription,
       hormoneLevel,
       fertilityScore,
-      cycleDay: adjustedCycleDay
+      cycleDay,
+      emotionalSupport,
+      wellnessTip
     };
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (cycleData.lastPeriodDate) {
-      const pred = calculateAdvancedPredictions(cycleData);
-      setPredictions(pred);
-      setIsSetup(true);
-    }
+  useEffect(() => {
+    setPredictions(calculatePredictions(cycleData));
+  }, [cycleData]);
+
+  const handleCycleDataUpdate = (field: keyof CycleData, value: any) => {
+    setCycleData(prev => ({ ...prev, [field]: value }));
   };
 
-  const saveSymptomEntry = () => {
-    if (symptoms.length > 0 || currentMood || flowLevel || notes) {
-      const entry: SymptomEntry = {
-        date: new Date().toISOString().split('T')[0],
-        symptoms,
-        mood: currentMood,
-        flow: flowLevel,
-        notes
-      };
-      setSymptomHistory(prev => [entry, ...prev]);
-      
-      // Reset form
-      setSymptoms([]);
-      setCurrentMood('');
-      setFlowLevel('');
-      setNotes('');
-    }
+  const addSymptomEntry = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const newEntry: SymptomEntry = {
+      date: today,
+      symptoms: [],
+      mood: '',
+      flow: '',
+      notes: '',
+      energyLevel: 5,
+      selfCareActivities: []
+    };
+    setSymptoms(prev => [newEntry, ...prev]);
+  };
+
+  const updateSymptomEntry = (index: number, field: keyof SymptomEntry, value: any) => {
+    setSymptoms(prev => prev.map((entry, i) => 
+      i === index ? { ...entry, [field]: value } : entry
+    ));
   };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
-  };
-
-  const formatDateShort = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
       month: 'short', 
-      day: 'numeric'
+      day: 'numeric',
+      year: 'numeric'
     });
-  };
-
-  const symptomOptions = [
-    'Cramps', 'Headache', 'Bloating', 'Mood swings', 'Fatigue', 
-    'Breast tenderness', 'Acne', 'Food cravings', 'Insomnia', 'Back pain',
-    'Nausea', 'Diarrhea', 'Constipation', 'Hot flashes', 'Dizziness'
-  ];
-
-  const moodOptions = ['Happy', 'Sad', 'Anxious', 'Irritable', 'Calm', 'Energetic', 'Tired'];
-  const flowOptions = ['Spotting', 'Light', 'Medium', 'Heavy', 'Very Heavy'];
-
-  const toggleSymptom = (symptom: string) => {
-    setSymptoms(prev => 
-      prev.includes(symptom) 
-        ? prev.filter(s => s !== symptom)
-        : [...prev, symptom]
-    );
   };
 
   const getFertilityColor = (score: number) => {
-    if (score >= 80) return 'text-red-600 bg-red-50';
-    if (score >= 50) return 'text-orange-600 bg-orange-50';
-    if (score >= 30) return 'text-yellow-600 bg-yellow-50';
-    return 'text-green-600 bg-green-50';
+    if (score <= 2) return 'text-blue-600 bg-blue-50';
+    if (score <= 3) return 'text-green-600 bg-green-50';
+    return 'text-pink-600 bg-pink-50';
   };
 
-  const getPhaseIcon = (phase: string) => {
+  const getPhaseColor = (phase: string) => {
     switch (phase) {
-      case 'Menstrual Phase': return <Droplets className="w-5 h-5 text-red-500" />;
-      case 'Follicular Phase': return <Sun className="w-5 h-5 text-yellow-500" />;
-      case 'Ovulation Phase': return <Activity className="w-5 h-5 text-pink-500" />;
-      case 'Luteal Phase': return <Moon className="w-5 h-5 text-purple-500" />;
-      default: return <Calendar className="w-5 h-5 text-gray-500" />;
+      case 'Menstrual': return 'text-red-600 bg-red-50';
+      case 'Follicular': return 'text-green-600 bg-green-50';
+      case 'Ovulation': return 'text-pink-600 bg-pink-50';
+      case 'Luteal': return 'text-purple-600 bg-purple-50';
+      default: return 'text-gray-600 bg-gray-50';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-purple-100">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={onBack}
-              className="p-2 hover:bg-purple-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                <Heart className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-800">Sakhi Module</h1>
-                <p className="text-sm text-gray-600">Your trusted companion for menstrual health</p>
+      <div className="bg-white/80 backdrop-blur-sm border-b border-pink-100 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={onBack}
+                className="p-2 hover:bg-pink-100 rounded-full transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-pink-600" />
+              </button>
+              <div className="flex items-center space-x-2">
+                <Flower className="w-6 h-6 text-pink-500" />
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
+                  Sakhi - Menstrual Wellness
+                </h1>
               </div>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {!isSetup ? (
-          /* Enhanced Setup Form */
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl mx-auto">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Heart className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">Welcome to Sakhi</h2>
-              <p className="text-gray-600">Let's personalize your menstrual health tracking. This information helps me provide accurate predictions and insights tailored just for you.</p>
-            </div>
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* Navigation Tabs */}
+        <div className="flex space-x-1 bg-white/60 backdrop-blur-sm p-1 rounded-xl mb-6 border border-pink-100">
+          {[
+            { id: 'tracker', label: 'Cycle Tracker', icon: Calendar },
+            { id: 'insights', label: 'Insights', icon: TrendingUp },
+            { id: 'symptoms', label: 'Symptoms', icon: Activity },
+            { id: 'wellness', label: 'Wellness', icon: Heart }
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-all ${
+                activeTab === id
+                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-white/80'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  When did your last period start? *
-                </label>
-                <input
-                  type="date"
-                  value={cycleData.lastPeriodDate}
-                  onChange={(e) => setCycleData(prev => ({ ...prev, lastPeriodDate: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
+        {/* Cycle Tracker Tab */}
+        {activeTab === 'tracker' && (
+          <div className="space-y-6">
+            {/* Cycle Setup */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                <Calendar className="w-5 h-5 text-pink-500 mr-2" />
+                Cycle Information
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Average cycle length (days)
+                    Last Period Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={cycleData.lastPeriodDate}
+                    onChange={(e) => handleCycleDataUpdate('lastPeriodDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Average Cycle Length (days)
                   </label>
                   <input
                     type="number"
                     min="21"
                     max="35"
                     value={cycleData.cycleLength}
-                    onChange={(e) => setCycleData(prev => ({ ...prev, cycleLength: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => handleCycleDataUpdate('cycleLength', parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Usually 21-35 days</p>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Period length (days)
+                    Period Length (days)
                   </label>
                   <input
                     type="number"
-                    min="2"
-                    max="8"
+                    min="3"
+                    max="7"
                     value={cycleData.periodLength}
-                    onChange={(e) => setCycleData(prev => ({ ...prev, periodLength: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => handleCycleDataUpdate('periodLength', parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Usually 2-8 days</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Flow Intensity
+                  </label>
+                  <select
+                    value={cycleData.flowIntensity}
+                    onChange={(e) => handleCycleDataUpdate('flowIntensity', e.target.value)}
+                    className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  >
+                    <option value="light">Light</option>
+                    <option value="medium">Medium</option>
+                    <option value="heavy">Heavy</option>
+                  </select>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Typical flow intensity
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['light', 'medium', 'heavy'] as const).map((intensity) => (
-                    <button
-                      key={intensity}
-                      type="button"
-                      onClick={() => setCycleData(prev => ({ ...prev, flowIntensity: intensity }))}
-                      className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors capitalize ${
-                        cycleData.flowIntensity === intensity
-                          ? 'border-purple-500 bg-purple-50 text-purple-700'
-                          : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-purple-300'
-                      }`}
-                    >
-                      {intensity}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-colors"
-              >
-                Start Your Journey with Sakhi
-              </button>
-            </form>
-          </div>
-        ) : (
-          /* Enhanced Dashboard */
-          <div className="space-y-8">
-            {/* Tab Navigation */}
-            <div className="flex space-x-1 bg-white/60 p-1 rounded-lg w-fit">
-              {[
-                { key: 'overview', label: 'Overview' },
-                { key: 'track', label: 'Track Today' },
-                { key: 'insights', label: 'Insights' },
-                { key: 'calendar', label: 'Calendar' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as any)}
-                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                    activeTab === tab.key
-                      ? 'bg-white text-purple-600 shadow-sm'
-                      : 'text-gray-600 hover:text-purple-600'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
             </div>
 
-            {activeTab === 'overview' && predictions && (
-              <div className="space-y-6">
-                {/* Current Status */}
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Your Cycle Today</h2>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Cycle Day</p>
-                      <p className="text-2xl font-bold text-purple-600">{predictions.cycleDay}</p>
-                    </div>
+            {/* Current Status */}
+            {predictions && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Current Phase</h3>
+                  <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mb-3 ${getPhaseColor(predictions.currentPhase)}`}>
+                    <span className="w-2 h-2 rounded-full bg-current mr-2"></span>
+                    {predictions.currentPhase} - Day {predictions.cycleDay}
                   </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-                        {getPhaseIcon(predictions.currentPhase)}
-                        <div>
-                          <p className="font-semibold text-gray-800">{predictions.currentPhase}</p>
-                          <p className="text-sm text-gray-600">{predictions.phaseDescription}</p>
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-blue-50 rounded-lg">
-                        <p className="text-sm text-gray-600 mb-1">Hormone Levels</p>
-                        <p className="font-semibold text-blue-800">{predictions.hormoneLevel}</p>
-                      </div>
+                  <p className="text-gray-600 text-sm mb-3">{predictions.phaseDescription}</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center">
+                      <Activity className="w-4 h-4 text-pink-500 mr-2" />
+                      <span className="text-gray-600">{predictions.hormoneLevel}</span>
                     </div>
-
-                    <div className="space-y-4">
-                      <div className="p-4 bg-rose-50 rounded-lg">
-                        <p className="text-sm text-gray-600 mb-1">Next Period</p>
-                        <p className="font-semibold text-gray-800">{formatDate(predictions.nextPeriod)}</p>
-                        <p className="text-lg font-bold text-rose-600">{predictions.daysUntilNextPeriod} days to go</p>
-                      </div>
-
-                      <div className={`p-4 rounded-lg ${getFertilityColor(predictions.fertilityScore)}`}>
-                        <p className="text-sm mb-1">Fertility Score</p>
-                        <p className="font-bold text-lg">{predictions.fertilityScore}%</p>
-                      </div>
+                    <div className={`flex items-center px-2 py-1 rounded ${getFertilityColor(predictions.fertilityScore)}`}>
+                      <Heart className="w-4 h-4 mr-2" />
+                      <span className="text-xs font-medium">
+                        Fertility Score: {predictions.fertilityScore}/5
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="bg-white rounded-xl shadow-lg p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Ovulation</p>
-                        <p className="font-semibold text-gray-800">{formatDateShort(predictions.ovulation)}</p>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Upcoming Dates</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-pink-50 rounded-lg">
+                      <div className="flex items-center">
+                        <Droplets className="w-4 h-4 text-pink-500 mr-2" />
+                        <span className="text-sm font-medium text-gray-700">Next Period</span>
                       </div>
-                      <Activity className="w-8 h-8 text-pink-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-lg p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Fertile Window</p>
-                        <p className="font-semibold text-gray-800">
-                          {formatDateShort(predictions.fertileWindow.start)} - {formatDateShort(predictions.fertileWindow.end)}
-                        </p>
-                      </div>
-                      <Heart className="w-8 h-8 text-red-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-lg p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Cycle Length</p>
-                        <p className="font-semibold text-gray-800">{cycleData.cycleLength} days</p>
-                      </div>
-                      <Calendar className="w-8 h-8 text-purple-500" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'track' && (
-              <div className="grid lg:grid-cols-2 gap-8">
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                  <h3 className="text-xl font-bold text-gray-800 mb-6">Track Today's Symptoms</h3>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <p className="font-medium text-gray-700 mb-3">How are you feeling?</p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {symptomOptions.map((symptom) => (
-                          <button
-                            key={symptom}
-                            onClick={() => toggleSymptom(symptom)}
-                            className={`p-2 rounded-lg border-2 text-xs font-medium transition-colors ${
-                              symptoms.includes(symptom)
-                                ? 'border-purple-500 bg-purple-50 text-purple-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-purple-300'
-                            }`}
-                          >
-                            {symptoms.includes(symptom) && <CheckCircle className="w-3 h-3 inline mr-1" />}
-                            {symptom}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="font-medium text-gray-700 mb-3">Mood</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {moodOptions.map((mood) => (
-                          <button
-                            key={mood}
-                            onClick={() => setCurrentMood(mood)}
-                            className={`p-2 rounded-lg border-2 text-sm font-medium transition-colors ${
-                              currentMood === mood
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-300'
-                            }`}
-                          >
-                            {mood}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="font-medium text-gray-700 mb-3">Flow Level</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {flowOptions.map((flow) => (
-                          <button
-                            key={flow}
-                            onClick={() => setFlowLevel(flow)}
-                            className={`p-2 rounded-lg border-2 text-sm font-medium transition-colors ${
-                              flowLevel === flow
-                                ? 'border-red-500 bg-red-50 text-red-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-red-300'
-                            }`}
-                          >
-                            {flow}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="font-medium text-gray-700 mb-3">Notes</p>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Any additional notes about how you're feeling today..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        rows={3}
-                      />
-                    </div>
-
-                    <button
-                      onClick={saveSymptomEntry}
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-colors"
-                    >
-                      Save Today's Entry
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                  <h3 className="text-xl font-bold text-gray-800 mb-6">Recent Entries</h3>
-                  
-                  <div className="space-y-4">
-                    {symptomHistory.length > 0 ? (
-                      symptomHistory.slice(0, 5).map((entry, index) => (
-                        <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-medium text-gray-800">
-                              {new Date(entry.date).toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric' 
-                              })}
-                            </p>
-                            {entry.mood && (
-                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                {entry.mood}
-                              </span>
-                            )}
-                          </div>
-                          {entry.symptoms.length > 0 && (
-                            <p className="text-sm text-gray-600 mb-1">
-                              <strong>Symptoms:</strong> {entry.symptoms.join(', ')}
-                            </p>
-                          )}
-                          {entry.flow && (
-                            <p className="text-sm text-gray-600 mb-1">
-                              <strong>Flow:</strong> {entry.flow}
-                            </p>
-                          )}
-                          {entry.notes && (
-                            <p className="text-sm text-gray-600">
-                              <strong>Notes:</strong> {entry.notes}
-                            </p>
-                          )}
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-gray-800">
+                          {formatDate(predictions.nextPeriod)}
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center text-gray-500 py-8">
-                        <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                        <p>No entries yet. Start tracking to see your patterns!</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'insights' && predictions && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                  <h3 className="text-xl font-bold text-gray-800 mb-6">Personalized Insights</h3>
-                  
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-3 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg">
-                      <TrendingUp className="w-5 h-5 text-blue-600 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-blue-800">Cycle Pattern Analysis</p>
-                        <p className="text-sm text-blue-700">
-                          Your {cycleData.cycleLength}-day cycle is {cycleData.cycleLength >= 21 && cycleData.cycleLength <= 35 ? 'within normal range' : 'outside typical range'}. 
-                          {cycleData.cycleLength === 28 && ' This is considered the average cycle length.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg">
-                      <Heart className="w-5 h-5 text-green-600 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-green-800">Health Recommendations</p>
-                        <p className="text-sm text-green-700">
-                          {predictions.currentPhase === 'Menstrual Phase' && 'Focus on rest, hydration, and gentle movement. Iron-rich foods can help replenish what you lose.'}
-                          {predictions.currentPhase === 'Follicular Phase' && 'Great time for new projects and intense workouts. Your energy is naturally increasing.'}
-                          {predictions.currentPhase === 'Ovulation Phase' && 'Peak energy and social time. Stay hydrated and consider tracking basal body temperature.'}
-                          {predictions.currentPhase === 'Luteal Phase' && 'Focus on self-care and stress management. Magnesium and B6 may help with PMS symptoms.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-3 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-                      <AlertCircle className="w-5 h-5 text-purple-600 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-purple-800">Fertility Awareness</p>
-                        <p className="text-sm text-purple-700">
-                          {predictions.fertilityScore >= 80 && 'You are in your most fertile window. If trying to conceive, this is optimal timing.'}
-                          {predictions.fertilityScore >= 50 && predictions.fertilityScore < 80 && 'Moderate fertility window. Conception is possible but less likely.'}
-                          {predictions.fertilityScore < 50 && 'Lower fertility period. Natural family planning users consider this a safer time.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {symptomHistory.length > 0 && (
-                      <div className="flex items-start space-x-3 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg">
-                        <Activity className="w-5 h-5 text-orange-600 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-orange-800">Symptom Patterns</p>
-                          <p className="text-sm text-orange-700">
-                            Based on your tracking, we're learning your unique patterns. Keep logging symptoms for more personalized insights.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                  <h3 className="text-xl font-bold text-gray-800 mb-6">Cultural Wellness Tips</h3>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-700">Ayurvedic Wisdom</h4>
-                      <div className="space-y-3">
-                        <div className="p-3 bg-green-50 rounded-lg">
-                          <p className="text-sm text-green-800">
-                            <strong>Warm foods:</strong> During menstruation, favor warm, cooked foods over cold or raw items.
-                          </p>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-800">
-                            <strong>Gentle yoga:</strong> Practice restorative poses like child's pose and gentle twists.
-                          </p>
+                        <div className="text-xs text-gray-500">
+                          in {predictions.daysUntilNextPeriod} days
                         </div>
                       </div>
                     </div>
-
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-700">Traditional Remedies</h4>
-                      <div className="space-y-3">
-                        <div className="p-3 bg-purple-50 rounded-lg">
-                          <p className="text-sm text-purple-800">
-                            <strong>Ginger tea:</strong> Natural anti-inflammatory that may help with cramps and nausea.
-                          </p>
-                        </div>
-                        <div className="p-3 bg-pink-50 rounded-lg">
-                          <p className="text-sm text-pink-800">
-                            <strong>Heat therapy:</strong> Warm compress on lower abdomen can provide natural pain relief.
-                          </p>
-                        </div>
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <div className="flex items-center">
+                        <Sparkles className="w-4 h-4 text-green-500 mr-2" />
+                        <span className="text-sm font-medium text-gray-700">Ovulation</span>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {formatDate(predictions.ovulation)}
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'calendar' && predictions && (
-              <div className="bg-white rounded-2xl shadow-xl p-8">
-                <h3 className="text-xl font-bold text-gray-800 mb-6">Cycle Calendar</h3>
-                
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div>
-                    <h4 className="font-semibold text-gray-700 mb-4">Upcoming Dates</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Droplets className="w-4 h-4 text-red-500" />
-                          <span className="font-medium text-gray-800">Next Period</span>
+                    <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                      <div className="flex items-center">
+                        <Heart className="w-4 h-4 text-purple-500 mr-2" />
+                        <span className="text-sm font-medium text-gray-700">Fertile Window</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-gray-800">
+                          {formatDate(predictions.fertileWindow.start)}
                         </div>
-                        <span className="text-sm text-gray-600">{formatDate(predictions.nextPeriod)}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-3 bg-pink-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Activity className="w-4 h-4 text-pink-500" />
-                          <span className="font-medium text-gray-800">Ovulation</span>
+                        <div className="text-xs text-gray-500">
+                          to {formatDate(predictions.fertileWindow.end)}
                         </div>
-                        <span className="text-sm text-gray-600">{formatDate(predictions.ovulation)}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Heart className="w-4 h-4 text-orange-500" />
-                          <span className="font-medium text-gray-800">Fertile Window</span>
-                        </div>
-                        <span className="text-sm text-gray-600">
-                          {formatDateShort(predictions.fertileWindow.start)} - {formatDateShort(predictions.fertileWindow.end)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-gray-700 mb-4">Cycle Legend</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Menstrual Phase</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Follicular Phase</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 bg-pink-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Ovulation Phase</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Luteal Phase</span>
                       </div>
                     </div>
                   </div>
@@ -700,9 +366,271 @@ function SakhiModule({ onBack }: SakhiModuleProps) {
             )}
           </div>
         )}
+
+        {/* Insights Tab */}
+        {activeTab === 'insights' && predictions && (
+          <div className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                <TrendingUp className="w-5 h-5 text-pink-500 mr-2" />
+                Personalized Insights
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border border-pink-100">
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <Heart className="w-4 h-4 text-pink-500 mr-2" />
+                      Emotional Support
+                    </h3>
+                    <p className="text-sm text-gray-600">{predictions.emotionalSupport}</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border border-green-100">
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <Activity className="w-4 h-4 text-green-500 mr-2" />
+                      Wellness Tip
+                    </h3>
+                    <p className="text-sm text-gray-600">{predictions.wellnessTip}</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-100">
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <Sun className="w-4 h-4 text-yellow-500 mr-2" />
+                      Energy Level
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-yellow-400 to-orange-400 h-2 rounded-full transition-all"
+                          style={{ width: `${(predictions.fertilityScore / 5) * 100}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-medium text-gray-600">
+                        {predictions.fertilityScore}/5
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <Moon className="w-4 h-4 text-indigo-500 mr-2" />
+                      Sleep & Recovery
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {predictions.currentPhase === 'Menstrual' 
+                        ? 'Prioritize 8-9 hours of sleep for recovery'
+                        : predictions.currentPhase === 'Ovulation'
+                        ? 'You may feel more energetic - maintain good sleep hygiene'
+                        : 'Aim for consistent sleep schedule to support hormonal balance'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Symptoms Tab */}
+        {activeTab === 'symptoms' && (
+          <div className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                  <Activity className="w-5 h-5 text-pink-500 mr-2" />
+                  Symptom Tracking
+                </h2>
+                <button
+                  onClick={addSymptomEntry}
+                  className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg hover:from-pink-600 hover:to-purple-600 transition-all font-medium"
+                >
+                  Add Entry
+                </button>
+              </div>
+              
+              {symptoms.length === 0 ? (
+                <div className="text-center py-8">
+                  <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No symptom entries yet. Add your first entry to start tracking!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {symptoms.map((entry, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={entry.date}
+                            onChange={(e) => updateSymptomEntry(index, 'date', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mood</label>
+                          <select
+                            value={entry.mood}
+                            onChange={(e) => updateSymptomEntry(index, 'mood', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                          >
+                            <option value="">Select mood</option>
+                            <option value="happy">Happy</option>
+                            <option value="calm">Calm</option>
+                            <option value="anxious">Anxious</option>
+                            <option value="irritable">Irritable</option>
+                            <option value="sad">Sad</option>
+                            <option value="energetic">Energetic</option>
+                            <option value="tired">Tired</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Flow</label>
+                          <select
+                            value={entry.flow}
+                            onChange={(e) => updateSymptomEntry(index, 'flow', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                          >
+                            <option value="">No flow</option>
+                            <option value="spotting">Spotting</option>
+                            <option value="light">Light</option>
+                            <option value="medium">Medium</option>
+                            <option value="heavy">Heavy</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea
+                          value={entry.notes}
+                          onChange={(e) => updateSymptomEntry(index, 'notes', e.target.value)}
+                          placeholder="Any additional notes about how you're feeling..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Wellness Tab */}
+        {activeTab === 'wellness' && (
+          <div className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-pink-100">
+              <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <Heart className="w-5 h-5 text-pink-500 mr-2" />
+                Wellness & Self-Care
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl border border-pink-100">
+                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <Heart className="w-4 h-4 text-pink-500 mr-2" />
+                      Self-Care Reminders
+                    </h3>
+                    <ul className="space-y-2 text-sm text-gray-600">
+                      <li className="flex items-center">
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                        Take time for gentle movement
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                        Stay hydrated throughout the day
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                        Practice mindfulness or meditation
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                        Get adequate sleep (7-9 hours)
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
+                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <Activity className="w-4 h-4 text-green-500 mr-2" />
+                      Nutrition Tips
+                    </h3>
+                    <ul className="space-y-2 text-sm text-gray-600">
+                      <li>• Iron-rich foods during menstruation</li>
+                      <li>• Calcium and magnesium for cramp relief</li>
+                      <li>• Complex carbs for stable energy</li>
+                      <li>• Omega-3 fatty acids for inflammation</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-100">
+                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <Moon className="w-4 h-4 text-purple-500 mr-2" />
+                      Cycle-Synced Activities
+                    </h3>
+                    {predictions && (
+                      <div className="text-sm text-gray-600">
+                        <p className="font-medium mb-2">For your {predictions.currentPhase} phase:</p>
+                        {predictions.currentPhase === 'Menstrual' && (
+                          <ul className="space-y-1">
+                            <li>• Gentle yoga or stretching</li>
+                            <li>• Warm baths with Epsom salts</li>
+                            <li>• Journaling and reflection</li>
+                            <li>• Restorative activities</li>
+                          </ul>
+                        )}
+                        {predictions.currentPhase === 'Follicular' && (
+                          <ul className="space-y-1">
+                            <li>• Try new workouts or activities</li>
+                            <li>• Social activities and networking</li>
+                            <li>• Creative projects</li>
+                            <li>• Goal setting and planning</li>
+                          </ul>
+                        )}
+                        {predictions.currentPhase === 'Ovulation' && (
+                          <ul className="space-y-1">
+                            <li>• High-intensity workouts</li>
+                            <li>• Important conversations</li>
+                            <li>• Public speaking or presentations</li>
+                            <li>• Social events and dating</li>
+                          </ul>
+                        )}
+                        {predictions.currentPhase === 'Luteal' && (
+                          <ul className="space-y-1">
+                            <li>• Moderate exercise like walking</li>
+                            <li>• Organizing and completing tasks</li>
+                            <li>• Self-care and relaxation</li>
+                            <li>• Preparing for next cycle</li>
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-100">
+                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <AlertCircle className="w-4 h-4 text-yellow-500 mr-2" />
+                      When to Consult a Doctor
+                    </h3>
+                    <ul className="space-y-1 text-sm text-gray-600">
+                      <li>• Severe pain that interferes with daily life</li>
+                      <li>• Irregular cycles (shorter than 21 or longer than 35 days)</li>
+                      <li>• Heavy bleeding (changing pad/tampon every hour)</li>
+                      <li>• Missing periods for 3+ months</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
 
 export default SakhiModule;
